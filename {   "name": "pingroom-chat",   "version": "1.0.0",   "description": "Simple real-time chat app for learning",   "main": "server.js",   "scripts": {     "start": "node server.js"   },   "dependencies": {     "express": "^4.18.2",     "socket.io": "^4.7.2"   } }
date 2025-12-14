@@ -1,0 +1,186 @@
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+app.use(express.static("public"));
+
+io.on("connection", (socket) => {
+  console.log("User connected");
+
+  socket.on("join", (username) => {
+    if (!username || username.trim() === "") return;
+
+    socket.username = username.trim();
+
+    io.emit("message", {
+      user: "System",
+      text: `${socket.username} joined the chat`
+    });
+  });
+
+  socket.on("chat", (msg) => {
+    if (!socket.username) return;
+    if (!msg || msg.trim() === "") return;
+
+    io.emit("message", {
+      user: socket.username,
+      text: msg.trim()
+    });
+  });
+
+  socket.on("disconnect", () => {
+    if (socket.username) {
+      io.emit("message", {
+        user: "System",
+        text: `${socket.username} left the chat`
+      });
+    }
+  });
+});
+
+const PORT = 3000;
+server.listen(PORT, () => {
+  console.log(`PingRoom running at http://localhost:${PORT}`);
+});
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PingRoom Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    #app {
+      width: 100%;
+      max-width: 420px;
+      background: #020617;
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #join {
+      padding: 20px;
+    }
+
+    #chat {
+      display: none;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #messages {
+      flex: 1;
+      padding: 15px;
+      overflow-y: auto;
+    }
+
+    .msg {
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+
+    .system {
+      color: #94a3b8;
+      font-style: italic;
+    }
+
+    input {
+      border: none;
+      padding: 12px;
+      font-size: 14px;
+      width: 100%;
+      outline: none;
+    }
+
+    button {
+      background: #2563eb;
+      border: none;
+      padding: 12px;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <div id="join">
+    <h2>PingRoom</h2>
+    <input id="username" placeholder="Enter username" />
+    <button onclick="joinChat()">Join Chat</button>
+  </div>
+
+  <div id="chat">
+    <div id="messages"></div>
+    <input id="msg" placeholder="Type a message" onkeydown="handleKey(event)" />
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+
+  function joinChat() {
+    const name = document.getElementById("username").value.trim();
+    if (!name) return;
+
+    socket.emit("join", name);
+    document.getElementById("join").style.display = "none";
+    document.getElementById("chat").style.display = "flex";
+  }
+
+  function handleKey(e) {
+    if (e.key === "Enter") {
+      sendMsg();
+    }
+  }
+
+  function sendMsg() {
+    const input = document.getElementById("msg");
+    const msg = input.value.trim();
+    if (!msg) return;
+
+    socket.emit("chat", msg);
+    input.value = "";
+  }
+
+  socket.on("message", (data) => {
+    const div = document.createElement("div");
+    div.classList.add("msg");
+
+    if (data.user === "System") {
+      div.classList.add("system");
+      div.textContent = data.text;
+    } else {
+      div.textContent = `${data.user}: ${data.text}`;
+    }
+
+    const messages = document.getElementById("messages");
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+  });
+</script>
+
+</body>
+</html>
